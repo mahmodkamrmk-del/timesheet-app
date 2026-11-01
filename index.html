@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تطبيق إدارة التايم شيت</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- ExcelJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+    
+    <!-- PWA Manifest Link -->
+    <link rel="manifest" href="./manifest.json">
+    
+    <script>
+        // تسجيل Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .catch(err => console.log('SW registration failed', err));
+            });
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+        body { font-family: 'Cairo', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 p-4 shadow-md sticky top-0 z-50">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold text-emerald-400">إدارة التايم شيت الشهري</h1>
+            <span id="syncStatus" class="text-xs bg-emerald-900 text-emerald-300 px-2 py-1 rounded-full">جاهز</span>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-md w-full mx-auto p-4 space-y-6">
+
+        <!-- File Upload Section -->
+        <section class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow">
+            <h2 class="text-sm font-semibold mb-2 text-gray-300">ملف التمبلت (xlsx)</h2>
+            <input type="file" id="fileInput" accept=".xlsx" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer">
+            <p id="fileInfo" class="text-xs text-gray-400 mt-2">لم يتم اختيار ملف. اختر الشيت أول مرة لتخزينه.</p>
+        </section>
+
+        <!-- Add Visit Form -->
+        <section class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow space-y-4">
+            <h2 class="text-md font-bold text-emerald-400">إضافة زيارة جديدة</h2>
+
+            <!-- Paste Area -->
+            <div>
+                <label class="block text-xs text-gray-400 mb-1">صق بيانات التيكت (3 أسطر: رقم التيكت، اسم السايت، إضافي):</label>
+                <textarea id="pasteArea" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500" placeholder="رقم التيكت
+اسم السايت
+أي رقم إضافي"></textarea>
+                <button onclick="parsePaste()" type="button" class="mt-1.5 w-full bg-gray-700 hover:bg-gray-600 text-xs py-1.5 rounded-lg transition">استخراج البيانات تلقائياً</button>
+            </div>
+
+            <!-- Ticket Number -->
+            <div>
+                <label class="block text-xs text-gray-400 mb-1">رقم التيكت (Call#):</label>
+                <input type="text" id="ticketNum" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <!-- Site Name -->
+            <div>
+                <label class="block text-xs text-gray-400 mb-1">اسم السايت (Site Name):</label>
+                <input type="text" id="siteName" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <!-- Day & Activity Type -->
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">اليوم (من 1 إلى 31):</label>
+                    <input type="number" id="visitDay" min="1" max="31" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">النوع:</label>
+                    <select id="activityType" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                        <option value="Call">Call</option>
+                        <option value="PM">PM</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Times -->
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">من (On Site Time):</label>
+                    <input type="time" id="timeFrom" value="09:00" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">المدة (ساعات):</label>
+                    <input type="number" id="durationHrs" step="0.5" value="1" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                </div>
+            </div>
+
+            <!-- Transportation Fare -->
+            <div>
+                <label class="block text-xs text-gray-400 mb-1">المواصلات (جنيه):</label>
+                <input type="number" id="transFare" value="75" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <!-- Add Button -->
+            <button onclick="addVisit()" class="w-full bg-emerald-600 hover:bg-emerald-500 font-bold py-3 rounded-lg shadow-lg transition text-white">
+                إضافة الزيارة للشيت وحفظ النسخة
+            </button>
+        </section>
+
+        <!-- Download Section -->
+        <section class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow text-center space-y-3">
+            <button onclick="downloadWorkbook()" class="w-full bg-blue-600 hover:bg-blue-500 font-bold py-3 rounded-lg shadow-lg transition text-white">
+                تحميل الشيت المحدّث (XLSX)
+            </button>
+            <p id="lastModified" class="text-xs text-gray-400">آخر تعديل: لا يوجد</p>
+        </section>
+
+    </main>
+
+    <!-- IndexedDB & Logic Script -->
+    <script>
+        let workbook = null;
+        let db = null;
+        const SLOT_COLS = [8, 17, 26, 35, 44, 53, 62, 71, 80, 89, 98, 107, 116, 125, 134];
+
+        const request = indexedDB.open("TimesheetDB", 1);
+        request.onerror = (event) => console.error("DB error:", event.target.error);
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            loadLatestFromDB();
+        };
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+            if (!db.objectStoreNames.contains("sheets")) {
+                db.createObjectStore("sheets", { keyPath: "id" });
+            }
+        };
+
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const arrayBuffer = await file.arrayBuffer();
+            workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(arrayBuffer);
+            saveToDB();
+            document.getElementById('fileInfo').innerText = "تم رفع الملف وتخزينه بنجاح.";
+        });
+
+        function parsePaste() {
+            const text = document.getElementById('pasteArea').value.trim();
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            if (lines.length >= 2) {
+                document.getElementById('ticketNum').value = lines[0];
+                document.getElementById('siteName').value = lines[1];
+            } else {
+                alert("يرجى لصق سطرين على الأقل (رقم التيكت واسم السايت).");
+            }
+        }
+
+        async function addVisit() {
+            if (!workbook) {
+                alert("يرجى اختيار ملف التمبلت أولاً!");
+                return;
+            }
+
+            const day = parseInt(document.getElementById('visitDay').value);
+            const ticket = document.getElementById('ticketNum').value.trim();
+            const site = document.getElementById('siteName').value.trim();
+            const type = document.getElementById('activityType').value;
+            const timeFrom = document.getElementById('timeFrom').value;
+            const duration = parseFloat(document.getElementById('durationHrs').value);
+            const fare = parseFloat(document.getElementById('transFare').value);
+
+            if (!day || day < 1 || day > 31 || !ticket || !site) {
+                alert("يرجى التأكد من إدخال اليوم، رقم التيكت، واسم السايت بشكل صحيح.");
+                return;
+            }
+
+            const sheet = workbook.getWorksheet('Activities');
+            if (!sheet) {
+                alert("لم يتم العثور على شيت باسم 'Activities' في الملف!");
+                return;
+            }
+
+            const rowNum = day + 6;
+
+            let duplicate = false;
+            for (let col of SLOT_COLS) {
+                const existingTicket = sheet.getCell(rowNum, col + 1).value;
+                if (existingTicket && existingTicket.toString() === ticket.toString()) {
+                    duplicate = true;
+                    break;
+                }
+            }
+
+            if (duplicate) {
+                alert("خطأ: هذا التيكت مسجل مسبقاً في نفس اليوم!");
+                return;
+            }
+
+            let targetSlotCol = null;
+            for (let col of SLOT_COLS) {
+                const siteVal = sheet.getCell(rowNum, col).value;
+                if (!siteVal) {
+                    targetSlotCol = col;
+                    break;
+                }
+            }
+
+            if (!targetSlotCol) {
+                alert("عذراً، لقد استنفذت الـ 15 Slots المتاحة لهذا اليوم!");
+                return;
+            }
+
+            sheet.getCell(rowNum, targetSlotCol).value = site;
+            sheet.getCell(rowNum, targetSlotCol + 1).value = ticket;
+            sheet.getCell(rowNum, targetSlotCol + 2).value = type;
+            
+            const [sh, sm] = timeFrom.split(':').map(Number);
+            sheet.getCell(rowNum, targetSlotCol + 3).value = { hours: sh, minutes: sm, seconds: 0 };
+            
+            sheet.getCell(rowNum, targetSlotCol + 4).value = duration;
+            sheet.getCell(rowNum, targetSlotCol + 5).value = duration;
+            sheet.getCell(rowNum, targetSlotCol + 8).value = fare;
+
+            if (!sheet.getCell(rowNum, 5).value) {
+                sheet.getCell(rowNum, 5).value = { hours: 9, minutes: 0, seconds: 0 };
+                sheet.getCell(rowNum, 6).value = { hours: 23, minutes: 59, seconds: 0 };
+                sheet.getCell(rowNum, 7).value = { formula: `=24*(F${rowNum}-E${rowNum})` };
+            }
+
+            saveToDB();
+            alert("تمت إضافة الزيارة وحفظ النسخة تلقائياً بنجاح!");
+            
+            document.getElementById('ticketNum').value = '';
+            document.getElementById('siteName').value = '';
+            document.getElementById('pasteArea').value = '';
+        }
+
+        async function saveToDB() {
+            if (!workbook) return;
+            const buffer = await workbook.xlsx.writeBuffer();
+            const transaction = db.transaction(["sheets"], "readwrite");
+            const store = transaction.objectStore("sheets");
+            const record = {
+                id: "latest_sheet",
+                data: buffer,
+                updatedAt: new Date().toLocaleString('ar-EG')
+            };
+            store.put(record);
+            document.getElementById('lastModified').innerText = `آخر تعديل: ${record.updatedAt}`;
+        }
+
+        function loadLatestFromDB() {
+            if (!db) return;
+            const transaction = db.transaction(["sheets"], "readonly");
+            const store = transaction.objectStore("sheets");
+            const request = store.get("latest_sheet");
+            request.onsuccess = async (event) => {
+                if (event.target.result) {
+                    const buffer = event.target.result.data;
+                    workbook = new ExcelJS.Workbook();
+                    await workbook.xlsx.load(buffer);
+                    document.getElementById('fileInfo').innerText = "تم استرجاع آخر نسخة محفوظة تلقائياً من التطبيق.";
+                    document.getElementById('lastModified').innerText = `آخر تعديل: ${event.target.result.updatedAt}`;
+                }
+            };
+        }
+
+        async function downloadWorkbook() {
+            if (!workbook) {
+                alert("لا يوجد ملف لتحميله! يرجى رفع الملف أو إضافة زيارة أولاً.");
+                return;
+            }
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "Timesheet_Updated.xlsx";
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
